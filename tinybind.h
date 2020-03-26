@@ -1,13 +1,16 @@
 #ifndef TINY_BIND
 #define TINY_BIND
 
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
 #include <string>
 #include <vector>
-#include <stdio.h>
-#include <stdlib.h>
 
 //-----------------------------------XML---------------------------------------//
 
+#ifndef __DISABLE_XML__
 //#define TIXML_USE_STL
 #include "tinyxml/tinystr.h"
 #include "tinyxml/tinyxml.h"
@@ -123,6 +126,87 @@ void TXB_text_bind( TiXmlElement* xmle, bool from, std::string* attr_content)
 	}
 }
 
+void TXB_binding( std::string* attr_content, TiXmlElement* xmle, bool from)
+{
+  TXB_text_bind( xmle, from, attr_content);
+}
+
+
+template <class T>
+void TXB_binding_int( T* attr_content, TiXmlElement* xmle, bool from)
+{
+if ( from) //from xml
+	{
+		const TiXmlNode* child = xmle->FirstChild();
+		if ( child ) {
+			const TiXmlText* childText = child->ToText();
+			if ( childText ) {
+				*attr_content = (T)atoi(childText->Value());
+			}
+		}
+	}
+	else //to xml
+	{
+		char buf[100];
+		sprintf(buf, "%d", *attr_content);
+		{
+			TiXmlText txt(buf);
+			if( xmle->FirstChild())
+				xmle->InsertBeforeChild( xmle->FirstChild(), txt);
+			else
+				xmle->InsertEndChild( txt);
+		}
+	}
+}
+
+void TXB_binding(int* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_int<int>(attr_content, xmle, from); }
+void TXB_binding(unsigned int* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_int<unsigned int>(attr_content, xmle, from); }
+void TXB_binding(char* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_int<char>(attr_content, xmle, from); }
+void TXB_binding(unsigned char* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_int<unsigned char>(attr_content, xmle, from); }
+void TXB_binding(short* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_int<short>(attr_content, xmle, from); }
+void TXB_binding(unsigned short* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_int<unsigned short>(attr_content, xmle, from); }
+
+
+template <class T>
+void TXB_binding_float( T* attr_content, TiXmlElement* xmle, bool from)
+{
+if ( from) //from xml
+	{
+		const TiXmlNode* child = xmle->FirstChild();
+		if ( child ) {
+			const TiXmlText* childText = child->ToText();
+			if ( childText ) {
+				*attr_content = (T)strtod(childText->Value(), 0);
+			}
+		}
+	}
+	else //to xml
+	{
+		char buf[100];
+		snprintf(buf,100,"%f",*attr_content);
+		{
+			TiXmlText txt(buf);
+			if( xmle->FirstChild())
+				xmle->InsertBeforeChild( xmle->FirstChild(), txt);
+			else
+				xmle->InsertEndChild( txt);
+		}
+	}
+}
+
+
+void TXB_binding(double* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_float<double>(attr_content, xmle, from); }
+void TXB_binding(float* attr_content, TiXmlElement* xmle, bool from)
+{	TXB_binding_float<float>(attr_content, xmle, from); }
+
+
 template <class T>
 void TXB_ele_bind( TiXmlElement* xmle, bool from, std::vector<T>* ANI, const char* tagname)
 {
@@ -150,9 +234,12 @@ void TXB_ele_bind( TiXmlElement* xmle, bool from, std::vector<T>* ANI, const cha
 		}
 	}
 }
+#endif //__DISABLE_XML__
+
 
 //-----------------------------------JSON---------------------------------------//
 
+#ifndef  __DISABLE_JSON__
 #include "cJSON/cJSON.h"
 
 //cJSON patches
@@ -200,6 +287,24 @@ void TXB_attr_bind_int( cJSON* json, bool from, T* attr_content, const char* att
 		cJSON_AddNumberToObject(json,attr_name,*attr_content);
 	}
 }
+
+template<class T>
+void TXB_attr_bind(cJSON* json, bool from, T* attr_content, const char* attr_name)
+{	
+	if ( from) //from json
+	{
+		cJSON* item = cJSON_GetObjectItem(json, attr_name);
+		TXB_binding(attr_content, item, 1);
+	}
+	else //to json
+	{
+		cJSON* item = cJSON_CreateObject();
+		TXB_binding(attr_content, item, 0);
+		cJSON_AddItemToObject(json, attr_name, item);
+	}
+}
+void TXB_attr_bind( cJSON* json, bool from, bool* attr_content, const char* attr_name)
+{	TXB_attr_bind_int<bool>(json,from,attr_content,attr_name); }
 void TXB_attr_bind( cJSON* json, bool from, int* attr_content, const char* attr_name)
 {	TXB_attr_bind_int<int>(json,from,attr_content,attr_name); }
 void TXB_attr_bind( cJSON* json, bool from, unsigned int* attr_content, const char* attr_name)
@@ -232,6 +337,21 @@ void TXB_attr_bind( cJSON* json, bool from, double* attr_content, const char* at
 void TXB_attr_bind( cJSON* json, bool from, float* attr_content, const char* attr_name)
 {	TXB_attr_bind_float<float>(json,from,attr_content,attr_name); }
 
+template<size_t N>
+void TXB_attr_bind( cJSON* json, bool from, char (*attr_content)[N], const char* attr_name)
+{
+	if ( from) //from json
+	{
+		cJSON* item = cJSON_GetObjectItem(json,attr_name);
+		if( item && item->type == cJSON_String){
+			snprintf(*attr_content, N, "%s", item->valuestring);
+		}
+	}
+	else //to json
+	{
+		cJSON_AddStringToObject(json,attr_name, *attr_content ? *attr_content : "");
+	}
+}
 void TXB_attr_bind( cJSON* json, bool from, std::string* attr_content, const char* attr_name)
 {
 	if ( from) //from json
@@ -246,10 +366,67 @@ void TXB_attr_bind( cJSON* json, bool from, std::string* attr_content, const cha
 			cJSON_AddStringToObject(json,attr_name, attr_content->c_str());
 	}
 }
-void TXB_text_bind( cJSON* json, bool from, std::string* attr_content)
+
+void TXB_binding( std::string* attr_content, cJSON* json, bool from)
 {
-	TXB_attr_bind( json, from, attr_content, "text");
+  if ( from) //from json
+  {
+    if( json && json->type == cJSON_String)
+			*attr_content = json->valuestring;
+  }
+  else  //to json
+  {
+    json->type = cJSON_String;
+    cJSON_SetStrValue(json, attr_content->c_str());
+  }
 }
+
+template <class T>
+void TXB_binding_int( T* attr_content, cJSON* json, bool from)
+{
+  if ( from) //from json
+  {
+    if( json && json->type == cJSON_Number)
+			*attr_content = json->valueint;
+  }
+  else  //to json
+  {
+    json->type = cJSON_Number;
+    cJSON_SetIntValue(json, *attr_content);
+  }
+}
+void TXB_binding(int* attr_content, cJSON* json, bool from)
+{	TXB_binding_int<int>(attr_content, json, from); }
+void TXB_binding(unsigned int* attr_content, cJSON* json, bool from)
+{	TXB_binding_int<unsigned int>(attr_content, json, from); }
+void TXB_binding(char* attr_content, cJSON* json, bool from)
+{	TXB_binding_int<char>(attr_content, json, from); }
+void TXB_binding(unsigned char* attr_content, cJSON* json, bool from)
+{	TXB_binding_int<unsigned char>(attr_content, json, from); }
+void TXB_binding(short* attr_content, cJSON* json, bool from)
+{	TXB_binding_int<short>(attr_content, json, from); }
+void TXB_binding(unsigned short* attr_content, cJSON* json, bool from)
+{	TXB_binding_int<unsigned short>(attr_content, json, from); }
+
+template <class T>
+void TXB_binding_float( T* attr_content, cJSON* json, bool from)
+{
+  if ( from) //from json
+  {
+    if( json && json->type == cJSON_Number)
+			*attr_content = json->valuedouble;
+  }
+  else  //to json
+  {
+    json->type = cJSON_Number;
+    cJSON_SetIntValue(json, *attr_content);
+  }
+}
+void TXB_binding(double* attr_content, cJSON* json, bool from)
+{	TXB_binding_float<double>(attr_content, json, from); }
+void TXB_binding(float* attr_content, cJSON* json, bool from)
+{	TXB_binding_float<float>(attr_content, json, from); }
+
 
 template <class T>
 void TXB_ele_bind( cJSON* json, bool from, std::vector<T>* ANI, const char* tagname)
@@ -279,5 +456,35 @@ void TXB_ele_bind( cJSON* json, bool from, std::vector<T>* ANI, const char* tagn
 		}
 	}
 }
+
+template <class T, size_t N>
+void TXB_ele_bind( cJSON* json, bool from, T (*ANI)[N], const char* tagname)
+{
+	if ( from) //from json
+	{
+		cJSON* arr = cJSON_GetObjectItem(json,tagname);
+		if( arr != NULL && arr->type == cJSON_Array)
+		for (int i=0, length=cJSON_GetArraySize(arr); i<length; i++)
+		{
+			cJSON* child=cJSON_GetArrayItem(arr,i);
+			T ani;
+			TXB_binding(&ani, child, 1);
+			*ANI[i] = ani;
+		}
+	}
+	else //to json
+	{
+		cJSON* arr = cJSON_CreateArray();
+		cJSON_AddItemToObject(json, tagname, arr);
+		for ( int i=0; i<N; i++)
+		{
+			T* ani = ANI[i];
+			cJSON* jani = cJSON_CreateObject();
+			TXB_binding(ani, jani, 0);
+			cJSON_AddItemToArray(arr, jani);
+		}
+	}
+}
+#endif //__DISABLE_JSON__
 
 #endif //TINY_BIND
